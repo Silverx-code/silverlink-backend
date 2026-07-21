@@ -5,13 +5,19 @@ const Company = {
     const {
       name, logoUrl, industry, description, website,
       locationId, address, status,
+      applyMethod, applyEmail, applyInstructions, applyUrl,
     } = data;
     const { rows } = await query(
-      `INSERT INTO companies (name, logo_url, industry, description, website, location_id, address, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'historical_listing'))
+      `INSERT INTO companies (
+         name, logo_url, industry, description, website, location_id, address, status,
+         apply_method, apply_email, apply_instructions, apply_url
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'historical_listing'),
+               COALESCE($9, 'platform'), $10, $11, $12)
        RETURNING *`,
       [name, logoUrl || null, industry || null, description || null, website || null,
-        locationId || null, address || null, status || null]
+        locationId || null, address || null, status || null,
+        applyMethod || null, applyEmail || null, applyInstructions || null, applyUrl || null]
     );
     return rows[0];
   },
@@ -72,6 +78,7 @@ const Company = {
     const allowed = [
       'name', 'logo_url', 'industry', 'description', 'website',
       'location_id', 'address', 'available_slots', 'listing_type',
+      'apply_method', 'apply_email', 'apply_instructions', 'apply_url',
     ];
     const sets = [];
     const values = [];
