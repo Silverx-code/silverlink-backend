@@ -1,20 +1,26 @@
 -- ============================================
 -- Silver Link — Database Schema (PostgreSQL)
 -- Normalized per Phase 1 MVP scope
+--
+-- Every statement here is written to be safe to run repeatedly against a
+-- database that already has some or all of this schema — CREATE TABLE IF NOT
+-- EXISTS, CREATE INDEX IF NOT EXISTS, and DROP-then-CREATE for triggers
+-- (Postgres has no CREATE TRIGGER IF NOT EXISTS). This matters because
+-- db/migrate.js is designed to run on every deploy, not just once.
 -- ============================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ---------- Reference tables ----------
 
-CREATE TABLE universities (
+CREATE TABLE IF NOT EXISTS universities (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name VARCHAR(150) NOT NULL UNIQUE,
   state VARCHAR(80),
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE locations (
+CREATE TABLE IF NOT EXISTS locations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   state VARCHAR(80) NOT NULL,
   city VARCHAR(80) NOT NULL,
@@ -26,7 +32,7 @@ CREATE TABLE locations (
 -- ---------- Core identity ----------
 
 -- Single users table for auth; role determines which profile table applies
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email VARCHAR(160) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
@@ -37,7 +43,7 @@ CREATE TABLE users (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE students (
+CREATE TABLE IF NOT EXISTS students (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   full_name VARCHAR(150) NOT NULL,
@@ -53,12 +59,12 @@ CREATE TABLE students (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
-CREATE INDEX idx_students_department ON students(department);
-CREATE INDEX idx_students_university ON students(university_id);
+CREATE INDEX IF NOT EXISTS idx_students_department ON students(department);
+CREATE INDEX IF NOT EXISTS idx_students_university ON students(university_id);
 
 -- ---------- Companies ----------
 
-CREATE TABLE companies (
+CREATE TABLE IF NOT EXISTS companies (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID UNIQUE REFERENCES users(id) ON DELETE SET NULL, -- null until claimed
   name VARCHAR(150) NOT NULL,
@@ -76,21 +82,21 @@ CREATE TABLE companies (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
-CREATE INDEX idx_companies_status ON companies(status);
-CREATE INDEX idx_companies_industry ON companies(industry);
-CREATE INDEX idx_companies_location ON companies(location_id);
+CREATE INDEX IF NOT EXISTS idx_companies_status ON companies(status);
+CREATE INDEX IF NOT EXISTS idx_companies_industry ON companies(industry);
+CREATE INDEX IF NOT EXISTS idx_companies_location ON companies(location_id);
 
-CREATE TABLE company_departments (
+CREATE TABLE IF NOT EXISTS company_departments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   department VARCHAR(120) NOT NULL,
   UNIQUE (company_id, department)
 );
-CREATE INDEX idx_company_departments_dept ON company_departments(department);
+CREATE INDEX IF NOT EXISTS idx_company_departments_dept ON company_departments(department);
 
 -- ---------- Interaction tables ----------
 
-CREATE TABLE applications (
+CREATE TABLE IF NOT EXISTS applications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -101,9 +107,9 @@ CREATE TABLE applications (
   updated_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE (student_id, company_id)
 );
-CREATE INDEX idx_applications_status ON applications(status);
+CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
 
-CREATE TABLE reviews (
+CREATE TABLE IF NOT EXISTS reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -117,9 +123,9 @@ CREATE TABLE reviews (
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE (student_id, company_id)
 );
-CREATE INDEX idx_reviews_company ON reviews(company_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_company ON reviews(company_id);
 
-CREATE TABLE saved_companies (
+CREATE TABLE IF NOT EXISTS saved_companies (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -127,7 +133,7 @@ CREATE TABLE saved_companies (
   UNIQUE (student_id, company_id)
 );
 
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title VARCHAR(150) NOT NULL,
@@ -135,9 +141,11 @@ CREATE TABLE notifications (
   is_read BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT now()
 );
-CREATE INDEX idx_notifications_user ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
 
 -- ---------- Trigger: keep updated_at fresh ----------
+-- CREATE OR REPLACE works for functions, but Postgres has no equivalent for
+-- triggers — DROP IF EXISTS then CREATE is the standard idempotent pattern.
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -146,7 +154,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_users_updated ON users;
 CREATE TRIGGER trg_users_updated BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_students_updated ON students;
 CREATE TRIGGER trg_students_updated BEFORE UPDATE ON students FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_companies_updated ON companies;
 CREATE TRIGGER trg_companies_updated BEFORE UPDATE ON companies FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_applications_updated ON applications;
 CREATE TRIGGER trg_applications_updated BEFORE UPDATE ON applications FOR EACH ROW EXECUTE FUNCTION set_updated_at();
