@@ -10,6 +10,9 @@ const {
   createUniversity,
   createCoordinator,
   getAnalytics,
+  listUsers,
+  setUserActive,
+  deleteUser,
 } = require('../controllers/adminController');
 
 const router = express.Router();
@@ -28,5 +31,9 @@ router.patch('/reviews/:id/moderate', moderateReview);
 router.get('/universities', listUniversities);
 router.post('/universities', createUniversity);
 router.post('/coordinators', createCoordinator);
+
+router.get('/users', listUsers);
+router.patch('/users/:id/active', setUserActive);
+router.delete('/users/:id', deleteUser);
 
 module.exports = router;

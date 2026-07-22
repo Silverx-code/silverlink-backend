@@ -54,6 +54,65 @@ const User = {
   async updatePassword(userId, passwordHash) {
     await query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
   },
+
+  // Admin user management — joins each role's profile table to get a display name,
+  // since the users table alone only has email/role.
+  async listAll({
+    role, q, limit, offset,
+  }) {
+    const conditions = [];
+    const values = [];
+    let i = 1;
+
+    if (role) {
+      conditions.push(`u.role = $${i}`);
+      values.push(role);
+      i += 1;
+    }
+    if (q) {
+      conditions.push(`(u.email ILIKE $${i} OR s.full_name ILIKE $${i} OR c.name ILIKE $${i} OR co.full_name ILIKE $${i})`);
+      values.push(`%${q}%`);
+      i += 1;
+    }
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const baseFrom = `
+      FROM users u
+      LEFT JOIN students s ON s.user_id = u.id
+      LEFT JOIN companies c ON c.user_id = u.id
+      LEFT JOIN coordinators co ON co.user_id = u.id
+      ${whereClause}`;
+
+    values.push(limit, offset);
+    const { rows } = await query(
+      `SELECT u.id, u.email, u.role, u.is_verified, u.is_active, u.created_at,
+              COALESCE(s.full_name, c.name, co.full_name) AS display_name
+       ${baseFrom}
+       ORDER BY u.created_at DESC
+       LIMIT $${i} OFFSET $${i + 1}`,
+      values
+    );
+
+    const { rows: countRows } = await query(
+      `SELECT COUNT(*)::int AS total ${baseFrom}`,
+      values.slice(0, i - 1)
+    );
+
+    return { rows, total: countRows[0].total };
+  },
+
+  async setActive(userId, isActive) {
+    const { rows } = await query(
+      'UPDATE users SET is_active = $1 WHERE id = $2 RETURNING id, email, role, is_active',
+      [isActive, userId]
+    );
+    return rows[0];
+  },
+
+  async delete(userId) {
+    const { rowCount } = await query('DELETE FROM users WHERE id = $1', [userId]);
+    return rowCount > 0;
+  },
 };
 
 module.exports = User;

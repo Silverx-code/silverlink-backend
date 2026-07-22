@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { query } = require('../config/db');
 const User = require('../models/User');
 const Coordinator = require('../models/Coordinator');
+const { getPagination, buildPaginationMeta } = require('../utils/pagination');
 
 // GET /api/admin/companies/pending — unverified or pending_confirmation companies
 const listPendingCompanies = asyncHandler(async (req, res) => {
@@ -168,6 +169,50 @@ const getAnalytics = asyncHandler(async (req, res) => {
   });
 });
 
+// ---------- User accounts ----------
+
+// GET /api/admin/users?role=&q=&page=&limit=
+const listUsers = asyncHandler(async (req, res) => {
+  const { page, limit, offset } = getPagination(req.query, 25);
+  const { role, q } = req.query;
+  const { rows, total } = await User.listAll({
+    role, q, limit, offset,
+  });
+  res.status(200).json({ success: true, data: rows, meta: buildPaginationMeta(page, limit, total) });
+});
+
+// PATCH /api/admin/users/:id/active  { isActive: boolean }
+// Soft, reversible — flips is_active, which login() already checks. Prefer this over
+// delete for e.g. handling abuse reports, since it doesn't destroy any data.
+const setUserActive = asyncHandler(async (req, res) => {
+  const { isActive } = req.body;
+  if (typeof isActive !== 'boolean') throw new ApiError(400, 'isActive must be true or false');
+
+  if (req.params.id === req.user.id && !isActive) {
+    throw new ApiError(400, 'You cannot deactivate your own account');
+  }
+
+  const updated = await User.setActive(req.params.id, isActive);
+  if (!updated) throw new ApiError(404, 'User not found');
+  res.status(200).json({ success: true, data: updated });
+});
+
+// DELETE /api/admin/users/:id
+// Hard delete — permanently removes the account. For students this cascades to their
+// applications, reviews, and saved companies (ON DELETE CASCADE in the schema). For
+// companies it only unclaims the listing (ON DELETE SET NULL) — the company's directory
+// entry, reviews, and application history survive. Consider setUserActive instead unless
+// you specifically need the data gone.
+const deleteUser = asyncHandler(async (req, res) => {
+  if (req.params.id === req.user.id) {
+    throw new ApiError(400, 'You cannot delete your own account');
+  }
+
+  const deleted = await User.delete(req.params.id);
+  if (!deleted) throw new ApiError(404, 'User not found');
+  res.status(200).json({ success: true, message: 'User deleted' });
+});
+
 module.exports = {
   listPendingCompanies,
   verifyCompanyManually,
@@ -178,4 +223,7 @@ module.exports = {
   createUniversity,
   createCoordinator,
   getAnalytics,
+  listUsers,
+  setUserActive,
+  deleteUser,
 };
