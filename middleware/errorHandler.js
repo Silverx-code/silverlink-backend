@@ -1,4 +1,5 @@
 const config = require('../config');
+const multer = require('multer');
 
 // 404 handler — placed after all routes
 function notFound(req, res, next) {
@@ -10,6 +11,15 @@ function notFound(req, res, next) {
 function errorHandler(err, req, res, next) {
   let statusCode = err.statusCode || 500;
   let message = err.message || 'Internal server error';
+
+  // Multer's own errors (file too large, unexpected field, etc.) are the requester's
+  // fault, not the server's — map them to 400 rather than falling through to 500.
+  if (err instanceof multer.MulterError) {
+    statusCode = 400;
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      message = 'That file is too large.';
+    }
+  }
 
   // Postgres unique violation
   if (err.code === '23505') {

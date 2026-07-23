@@ -22,7 +22,13 @@ const cvStorage = new CloudinaryStorage({
   params: {
     folder: 'silverlink/cvs',
     resource_type: 'raw', // PDFs/docs are not images
-    allowed_formats: ['pdf', 'doc', 'docx'],
+    // Deliberately no `allowed_formats` here — Cloudinary's own format validation for
+    // raw resources doesn't reliably recognize legitimate types like docx (a documented
+    // Cloudinary quirk: https://cloudinary.com/documentation/upload_images#uploading_non_media_files_as_raw_files),
+    // rejecting valid files with a misleading "unknown file format" error. File-type
+    // validation happens in middleware/upload.js's fileFilter instead, before the file
+    // ever reaches Cloudinary — we control that allowlist directly instead of depending
+    // on Cloudinary's.
   },
 });
 
