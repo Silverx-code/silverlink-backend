@@ -23,19 +23,33 @@ function generateChallenge() {
 }
 
 function verifyChallenge(token, answer) {
-  if (!token || answer === undefined || answer === null) return false;
+  if (!token || answer === undefined || answer === null) {
+    console.log('[captcha] rejected: missing token or answer');
+    return false;
+  }
   try {
     const decoded = Buffer.from(token, 'base64url').toString('utf8');
     const [a, b, expires, signature] = decoded.split('.');
     const payload = `${a}.${b}.${expires}`;
     const expectedSignature = sign(payload);
 
-    if (signature !== expectedSignature) return false;
-    if (Date.now() > Number(expires)) return false;
+    if (signature !== expectedSignature) {
+      console.log('[captcha] rejected: signature mismatch — token may be stale from before a JWT_SECRET change/redeploy');
+      return false;
+    }
+    if (Date.now() > Number(expires)) {
+      console.log(`[captcha] rejected: expired ${Math.round((Date.now() - Number(expires)) / 1000)}s ago`);
+      return false;
+    }
 
     const expected = Number(a) + Number(b);
-    return Number(answer) === expected;
+    const isCorrect = Number(answer) === expected;
+    if (!isCorrect) {
+      console.log(`[captcha] rejected: wrong answer — expected ${expected}, got ${answer}`);
+    }
+    return isCorrect;
   } catch (err) {
+    console.log('[captcha] rejected: could not decode token —', err.message);
     return false;
   }
 }

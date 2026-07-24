@@ -12,6 +12,13 @@ function getTransporter() {
     port: Number(config.email.port) || 587,
     secure: false,
     auth: config.email.user ? { user: config.email.user, pass: config.email.password } : undefined,
+    // A reachable SMTP provider responds in well under this — if it doesn't, something's
+    // actually wrong (wrong host, network issue, provider outage), and failing fast beats
+    // hanging for minutes even though sendMail() below no longer lets that failure block
+    // the caller either way.
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
   return transporter;
 }
@@ -23,7 +30,15 @@ async function sendMail({ to, subject, html }) {
     console.log(`[email:noop] To: ${to} | Subject: ${subject}`);
     return;
   }
-  await t.sendMail({ from: config.email.from, to, subject, html });
+  try {
+    await t.sendMail({ from: config.email.from, to, subject, html });
+  } catch (err) {
+    // Email delivery must never fail the request that triggered it — registration,
+    // password reset, and application-status updates all still need to succeed even
+    // if the SMTP provider is slow/unreachable/misconfigured. Log it so it's visible
+    // in Render's logs, but don't let it propagate and 500 the caller.
+    console.error(`[email:failed] To: ${to} | Subject: ${subject} |`, err.message);
+  }
 }
 
 function verificationEmailHtml({ companyName, verifyUrl }) {
