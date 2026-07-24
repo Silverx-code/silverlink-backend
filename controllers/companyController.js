@@ -4,6 +4,7 @@ const Company = require('../models/Company');
 const Student = require('../models/Student');
 const { query } = require('../config/db');
 const { getPagination, buildPaginationMeta } = require('../utils/pagination');
+const { uploadToStorage } = require('../utils/uploadToStorage');
 
 // GET /api/companies?department=&industry=&state=&city=&status=&q=&page=&limit=
 const searchCompanies = asyncHandler(async (req, res) => {
@@ -128,7 +129,8 @@ const uploadMyLogo = asyncHandler(async (req, res) => {
   const company = await Company.findByUserId(req.user.id);
   if (!company) throw new ApiError(404, 'No company profile found for this account');
   if (!req.file) throw new ApiError(400, 'No logo file uploaded');
-  const updated = await Company.updateOwnProfile(company.id, { logo_url: req.file.path });
+  const logoUrl = await uploadToStorage(req.file.buffer, req.file.originalname, 'logos', req.file.mimetype);
+  const updated = await Company.updateOwnProfile(company.id, { logo_url: logoUrl });
   res.status(200).json({ success: true, data: updated });
 });
 

@@ -1,46 +1,36 @@
 const multer = require('multer');
-const ApiError = require('../utils/ApiError');
-const { logoStorage, cvStorage } = require('../config/cloudinary');
 
-// Matched against the file's mimetype AND extension — mimetype alone can be spoofed
-// or reported inconsistently by different browsers/OSes, so we check both and accept
-// either matching, rather than relying on Cloudinary's own (unreliable) format checks.
-const ALLOWED_CV_TYPES = [
-  { mimetype: 'application/pdf', ext: '.pdf' },
-  { mimetype: 'application/msword', ext: '.doc' },
-  { mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: '.docx' },
-];
-
-function cvFileFilter(req, file, cb) {
-  const nameLower = file.originalname.toLowerCase();
-  const matches = ALLOWED_CV_TYPES.some(
-    (t) => file.mimetype === t.mimetype || nameLower.endsWith(t.ext)
-  );
-  if (!matches) {
-    return cb(new ApiError(400, 'CV must be a PDF, DOC, or DOCX file.'));
-  }
-  return cb(null, true);
-}
-
-const ALLOWED_LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-
-function logoFileFilter(req, file, cb) {
-  if (!ALLOWED_LOGO_TYPES.includes(file.mimetype)) {
-    return cb(new ApiError(400, 'Logo must be a JPG, PNG, or WEBP image.'));
-  }
-  return cb(null, true);
-}
+// Files are held in memory as a buffer, then handed off to
+// utils/uploadToStorage.js to push into Supabase Storage. Nothing is ever
+// written to Render's (ephemeral) local disk.
+const memoryStorage = multer.memoryStorage();
 
 const uploadLogo = multer({
-  storage: logoStorage,
+  storage: memoryStorage,
   limits: { fileSize: 3 * 1024 * 1024 }, // 3MB
-  fileFilter: logoFileFilter,
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.mimetype)) {
+      return cb(new Error('Logo must be a JPG, PNG, or WEBP image'));
+    }
+    cb(null, true);
+  },
 }).single('logo');
 
 const uploadCv = multer({
-  storage: cvStorage,
+  storage: memoryStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: cvFileFilter,
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+    if (!allowed.includes(file.mimetype)) {
+      return cb(new Error('CV must be a PDF, DOC, or DOCX file'));
+    }
+    cb(null, true);
+  },
 }).single('cv');
 
 module.exports = { uploadLogo, uploadCv };
