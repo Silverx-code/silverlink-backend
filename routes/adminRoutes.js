@@ -15,6 +15,7 @@ const {
   deleteUser,
   listCompaniesAdmin,
   deleteCompany,
+  checkEmailConnectivity,
 } = require('../controllers/adminController');
 
 const router = express.Router();
@@ -23,6 +24,7 @@ router.use(protect, restrictTo('admin'));
 
 router.get('/stats', getStats);
 router.get('/analytics', getAnalytics);
+router.get('/diagnostics/email', checkEmailConnectivity);
 
 router.get('/companies/pending', listPendingCompanies);
 router.patch('/companies/:id/verify', verifyCompanyManually);

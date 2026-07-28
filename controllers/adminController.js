@@ -1,7 +1,9 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const bcrypt = require('bcryptjs');
+const net = require('net');
 const { query } = require('../config/db');
+const config = require('../config');
 const User = require('../models/User');
 const Coordinator = require('../models/Coordinator');
 const Company = require('../models/Company');
@@ -236,6 +238,54 @@ const deleteCompany = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Company listing deleted' });
 });
 
+// GET /api/admin/diagnostics/email
+// Tests raw TCP connectivity to the configured SMTP host from wherever this backend
+// is actually running (Render, not your local machine) — the only way to tell whether
+// a "Connection timeout" is a wrong env var vs. Render's network genuinely being unable
+// to reach the host, since there's no Shell access to test this directly on the free tier.
+const checkEmailConnectivity = asyncHandler(async (req, res) => {
+  const { host, port: rawPort, user, password } = config.email;
+  const port = Number(rawPort) || 587;
+
+  if (!host) {
+    return res.status(200).json({
+      success: true,
+      data: { configured: false, message: 'EMAIL_HOST is not set on this server.' },
+    });
+  }
+
+  const result = await new Promise((resolve) => {
+    const socket = new net.Socket();
+    const timer = setTimeout(() => {
+      socket.destroy();
+      resolve({ connected: false, error: 'Timed out after 8s trying to reach the host on this port.' });
+    }, 8000);
+
+    socket.connect(port, host, () => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve({ connected: true });
+    });
+
+    socket.on('error', (err) => {
+      clearTimeout(timer);
+      resolve({ connected: false, error: err.message, code: err.code });
+    });
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      configured: true,
+      host,
+      port,
+      hasUser: Boolean(user),
+      hasPassword: Boolean(password),
+      ...result,
+    },
+  });
+});
+
 module.exports = {
   listPendingCompanies,
   verifyCompanyManually,
@@ -251,4 +301,5 @@ module.exports = {
   deleteUser,
   listCompaniesAdmin,
   deleteCompany,
+  checkEmailConnectivity,
 };
