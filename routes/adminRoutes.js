@@ -13,6 +13,8 @@ const {
   listUsers,
   setUserActive,
   deleteUser,
+  listCompaniesAdmin,
+  deleteCompany,
 } = require('../controllers/adminController');
 
 const router = express.Router();
@@ -24,6 +26,8 @@ router.get('/analytics', getAnalytics);
 
 router.get('/companies/pending', listPendingCompanies);
 router.patch('/companies/:id/verify', verifyCompanyManually);
+router.get('/companies', listCompaniesAdmin);
+router.delete('/companies/:id', deleteCompany);
 
 router.get('/reviews/unmoderated', listUnmoderatedReviews);
 router.patch('/reviews/:id/moderate', moderateReview);

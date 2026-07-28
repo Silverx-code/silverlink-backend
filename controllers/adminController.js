@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { query } = require('../config/db');
 const User = require('../models/User');
 const Coordinator = require('../models/Coordinator');
+const Company = require('../models/Company');
 const { getPagination, buildPaginationMeta } = require('../utils/pagination');
 
 // GET /api/admin/companies/pending — unverified or pending_confirmation companies
@@ -213,6 +214,28 @@ const deleteUser = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'User deleted' });
 });
 
+// ---------- Company management (view + delete listings) ----------
+
+// GET /api/admin/companies?q=&page=&limit=
+const listCompaniesAdmin = asyncHandler(async (req, res) => {
+  const { page, limit, offset } = getPagination(req.query, 25);
+  const { q } = req.query;
+  const { rows, total } = await Company.adminList({ q, limit, offset });
+  res.status(200).json({ success: true, data: rows, meta: buildPaginationMeta(page, limit, total) });
+});
+
+// DELETE /api/admin/companies/:id
+// Permanently removes the listing and (via ON DELETE CASCADE) its departments,
+// applications, reviews, saved-company bookmarks, and profile-view history. If the
+// listing had been claimed, the company's user account is NOT deleted — only the
+// listing itself (companies.user_id is a one-directional reference, so this doesn't
+// touch the users table).
+const deleteCompany = asyncHandler(async (req, res) => {
+  const deleted = await Company.delete(req.params.id);
+  if (!deleted) throw new ApiError(404, 'Company not found');
+  res.status(200).json({ success: true, message: 'Company listing deleted' });
+});
+
 module.exports = {
   listPendingCompanies,
   verifyCompanyManually,
@@ -226,4 +249,6 @@ module.exports = {
   listUsers,
   setUserActive,
   deleteUser,
+  listCompaniesAdmin,
+  deleteCompany,
 };
