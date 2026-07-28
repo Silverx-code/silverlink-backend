@@ -290,6 +290,52 @@ const Company = {
     );
     return rows[0];
   },
+  // Admin company management — richer than the public search: shows whether a listing
+  // has been claimed by a real account, and how much activity (applications, reviews)
+  // would be lost if it were deleted, so the admin panel can show that before deleting.
+  async adminList({ q, limit, offset }) {
+    const conditions = [];
+    const values = [];
+    let i = 1;
+
+    if (q) {
+      conditions.push(`(c.name ILIKE $${i} OR c.industry ILIKE $${i})`);
+      values.push(`%${q}%`);
+      i += 1;
+    }
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const baseFrom = `
+      FROM companies c
+      LEFT JOIN applications a ON a.company_id = c.id
+      LEFT JOIN reviews r ON r.company_id = c.id
+      ${whereClause}`;
+
+    values.push(limit, offset);
+    const { rows } = await query(
+      `SELECT c.id, c.name, c.industry, c.status, c.is_verified, c.created_at,
+              (c.user_id IS NOT NULL) AS claimed,
+              COUNT(DISTINCT a.id)::int AS application_count,
+              COUNT(DISTINCT r.id)::int AS review_count
+       ${baseFrom}
+       GROUP BY c.id
+       ORDER BY c.created_at DESC
+       LIMIT $${i} OFFSET $${i + 1}`,
+      values
+    );
+
+    const { rows: countRows } = await query(
+      `SELECT COUNT(DISTINCT c.id)::int AS total ${baseFrom}`,
+      values.slice(0, i - 1)
+    );
+
+    return { rows, total: countRows[0].total };
+  },
+
+  async delete(id) {
+    const { rowCount } = await query('DELETE FROM companies WHERE id = $1', [id]);
+    return rowCount > 0;
+  },
 };
 
 module.exports = Company;
