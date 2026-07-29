@@ -1,42 +1,43 @@
-const nodemailer = require('nodemailer');
 const config = require('../config');
 
-let transporter = null;
+const RESEND_API_URL = 'https://api.resend.com/emails';
 
-function getTransporter() {
-  if (transporter) return transporter;
-  if (!config.email.host) return null; // email not configured — dev/no-op mode
-
-  transporter = nodemailer.createTransport({
-    host: config.email.host,
-    port: Number(config.email.port) || 587,
-    secure: false,
-    auth: config.email.user ? { user: config.email.user, pass: config.email.password } : undefined,
-    // A reachable SMTP provider responds in well under this — if it doesn't, something's
-    // actually wrong (wrong host, network issue, provider outage), and failing fast beats
-    // hanging for minutes even though sendMail() below no longer lets that failure block
-    // the caller either way.
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
-  });
-  return transporter;
-}
-
+// Resend's HTTP API instead of SMTP — Render blocks outbound SMTP ports (25/465/587)
+// on free web services as an anti-abuse measure, which is what caused the
+// ETIMEDOUT/connection-timeout failures seen in production. This is a plain HTTPS
+// POST request, which isn't affected by that block at all. If you switch providers
+// later, only this function needs to change — the rest of the app just calls sendMail().
 async function sendMail({ to, subject, html }) {
-  const t = getTransporter();
-  if (!t) {
-    // No email provider configured — log instead of failing the request
+  if (!config.email.resendApiKey) {
+    // No provider configured — log instead of failing the request
     console.log(`[email:noop] To: ${to} | Subject: ${subject}`);
     return;
   }
+
   try {
-    await t.sendMail({ from: config.email.from, to, subject, html });
+    const res = await fetch(RESEND_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.email.resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: config.email.from,
+        to,
+        subject,
+        html,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Resend API returned ${res.status}: ${body}`);
+    }
   } catch (err) {
     // Email delivery must never fail the request that triggered it — registration,
     // password reset, and application-status updates all still need to succeed even
-    // if the SMTP provider is slow/unreachable/misconfigured. Log it so it's visible
-    // in Render's logs, but don't let it propagate and 500 the caller.
+    // if Resend is slow/unreachable/misconfigured. Log it so it's visible in Render's
+    // logs, but don't let it propagate and 500 the caller.
     console.error(`[email:failed] To: ${to} | Subject: ${subject} |`, err.message);
   }
 }

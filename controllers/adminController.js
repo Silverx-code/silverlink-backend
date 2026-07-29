@@ -1,7 +1,6 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const bcrypt = require('bcryptjs');
-const net = require('net');
 const { query } = require('../config/db');
 const config = require('../config');
 const User = require('../models/User');
@@ -239,51 +238,44 @@ const deleteCompany = asyncHandler(async (req, res) => {
 });
 
 // GET /api/admin/diagnostics/email
-// Tests raw TCP connectivity to the configured SMTP host from wherever this backend
-// is actually running (Render, not your local machine) — the only way to tell whether
-// a "Connection timeout" is a wrong env var vs. Render's network genuinely being unable
-// to reach the host, since there's no Shell access to test this directly on the free tier.
+// Confirms RESEND_API_KEY is set and that Render can actually reach Resend's API over
+// HTTPS (not SMTP — that path is gone now, since Render blocks outbound SMTP ports on
+// free web services, which is what caused the original ETIMEDOUT failures).
 const checkEmailConnectivity = asyncHandler(async (req, res) => {
-  const { host, port: rawPort, user, password } = config.email;
-  const port = Number(rawPort) || 587;
+  const { resendApiKey, from } = config.email;
 
-  if (!host) {
+  if (!resendApiKey) {
     return res.status(200).json({
       success: true,
-      data: { configured: false, message: 'EMAIL_HOST is not set on this server.' },
+      data: { configured: false, message: 'RESEND_API_KEY is not set on this server.' },
     });
   }
 
-  const result = await new Promise((resolve) => {
-    const socket = new net.Socket();
-    const timer = setTimeout(() => {
-      socket.destroy();
-      resolve({ connected: false, error: 'Timed out after 8s trying to reach the host on this port.' });
-    }, 8000);
-
-    socket.connect(port, host, () => {
-      clearTimeout(timer);
-      socket.destroy();
-      resolve({ connected: true });
+  try {
+    // A lightweight authenticated call — listing API keys just confirms the key is
+    // valid and Resend's API is reachable, without sending an actual test email.
+    const apiRes = await fetch('https://api.resend.com/api-keys', {
+      headers: { Authorization: `Bearer ${resendApiKey}` },
     });
 
-    socket.on('error', (err) => {
-      clearTimeout(timer);
-      resolve({ connected: false, error: err.message, code: err.code });
+    res.status(200).json({
+      success: true,
+      data: {
+        configured: true,
+        from,
+        reachable: true,
+        resendStatus: apiRes.status,
+        keyValid: apiRes.status !== 401,
+      },
     });
-  });
-
-  res.status(200).json({
-    success: true,
-    data: {
-      configured: true,
-      host,
-      port,
-      hasUser: Boolean(user),
-      hasPassword: Boolean(password),
-      ...result,
-    },
-  });
+  } catch (err) {
+    res.status(200).json({
+      success: true,
+      data: {
+        configured: true, from, reachable: false, error: err.message,
+      },
+    });
+  }
 });
 
 module.exports = {
