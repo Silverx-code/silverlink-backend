@@ -20,6 +20,7 @@ const applicationRoutes = require('./routes/applicationRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 
 const app = express();
+app.set('trust proxy', 1);
 
 // ---- Core middleware ----
 app.use(helmet());
