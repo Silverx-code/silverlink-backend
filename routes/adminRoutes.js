@@ -21,6 +21,7 @@ const {
 const router = express.Router();
 
 router.use(protect, restrictTo('admin'));
+router.get('/companies/:id/verification-link', getCompanyVerificationLink);
 
 router.get('/stats', getStats);
 router.get('/analytics', getAnalytics);

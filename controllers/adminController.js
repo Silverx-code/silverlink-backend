@@ -7,6 +7,7 @@ const User = require('../models/User');
 const Coordinator = require('../models/Coordinator');
 const Company = require('../models/Company');
 const { getPagination, buildPaginationMeta } = require('../utils/pagination');
+const { generateToken, hoursFromNow } = require('../utils/randomToken');
 
 // GET /api/admin/companies/pending — unverified or pending_confirmation companies
 const listPendingCompanies = asyncHandler(async (req, res) => {
@@ -33,6 +34,31 @@ const verifyCompanyManually = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: rows[0] });
 });
 
+// GET /api/admin/companies/:id/verification-link
+// Generates a fresh verification link WITHOUT sending any email — useful right now
+// since Resend needs a verified domain we don't have yet. Copy this link and send it
+// manually (personal email, WhatsApp, etc.). When the company clicks it, the normal
+// /verify-company/:token flow still runs — the "prove you control this inbox" step
+// stays intact, only how the link reaches them changes.
+const getCompanyVerificationLink = asyncHandler(async (req, res) => {
+  const { rows } = await query('SELECT id, name, verification_email FROM companies WHERE id = $1', [req.params.id]);
+  const company = rows[0];
+  if (!company) throw new ApiError(404, 'Company not found');
+
+  const token = generateToken();
+  await Company.setVerificationToken(company.id, token, hoursFromNow(24));
+
+  const url = `${config.clientUrl}/verify-company/${token}`;
+  res.status(200).json({
+    success: true,
+    data: {
+      url,
+      companyName: company.name,
+      companyEmail: company.verification_email,
+      expiresInHours: 24,
+    },
+  });
+});
 // GET /api/admin/reviews/unmoderated
 const listUnmoderatedReviews = asyncHandler(async (req, res) => {
   const { rows } = await query(
