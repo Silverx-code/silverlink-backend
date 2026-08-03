@@ -319,5 +319,6 @@ module.exports = {
   deleteUser,
   listCompaniesAdmin,
   deleteCompany,
+  getCompanyVerificationLink,
   checkEmailConnectivity,
 };
