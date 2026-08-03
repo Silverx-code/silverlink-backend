@@ -1,12 +1,10 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const Company = require('../models/Company');
-const Student = require('../models/Student');
 const { query } = require('../config/db');
 const { getPagination, buildPaginationMeta } = require('../utils/pagination');
-const { uploadToStorage } = require('../utils/uploadToStorage');
+const uploadToStorage = require('../utils/uploadToStorage');
 
-// GET /api/companies?department=&industry=&state=&city=&status=&q=&page=&limit=
 const searchCompanies = asyncHandler(async (req, res) => {
   const { page, limit, offset } = getPagination(req.query);
   const {
@@ -54,6 +52,7 @@ const updateCompanyStatus = asyncHandler(async (req, res) => {
 });
 
 const addReview = asyncHandler(async (req, res) => {
+  const Student = require('../models/Student');
   const student = await Student.findByUserId(req.user.id);
   if (!student) throw new ApiError(404, 'Student profile not found');
 
@@ -129,8 +128,14 @@ const uploadMyLogo = asyncHandler(async (req, res) => {
   const company = await Company.findByUserId(req.user.id);
   if (!company) throw new ApiError(404, 'No company profile found for this account');
   if (!req.file) throw new ApiError(400, 'No logo file uploaded');
-  const logoUrl = await uploadToStorage(req.file.buffer, req.file.originalname, 'logos', req.file.mimetype);
-  const updated = await Company.updateOwnProfile(company.id, { logo_url: logoUrl });
+
+  const url = await uploadToStorage(req.file.buffer, {
+    folder: 'logos',
+    filename: req.file.originalname,
+    contentType: req.file.mimetype,
+  });
+
+  const updated = await Company.updateOwnProfile(company.id, { logo_url: url });
   res.status(200).json({ success: true, data: updated });
 });
 

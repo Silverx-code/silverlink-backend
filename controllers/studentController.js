@@ -3,7 +3,7 @@ const ApiError = require('../utils/ApiError');
 const Student = require('../models/Student');
 const Company = require('../models/Company');
 const { query } = require('../config/db');
-const { uploadToStorage } = require('../utils/uploadToStorage');
+const uploadToStorage = require('../utils/uploadToStorage');
 
 const getMyProfile = asyncHandler(async (req, res) => {
   const student = await Student.findByUserId(req.user.id);
@@ -63,8 +63,14 @@ const getRecommendations = asyncHandler(async (req, res) => {
 
 const uploadMyCv = asyncHandler(async (req, res) => {
   if (!req.file) throw new ApiError(400, 'No CV file uploaded');
-  const cvUrl = await uploadToStorage(req.file.buffer, req.file.originalname, 'cvs', req.file.mimetype);
-  const updated = await Student.updateProfile(req.user.id, { cv_url: cvUrl });
+
+  const url = await uploadToStorage(req.file.buffer, {
+    folder: 'cvs',
+    filename: req.file.originalname,
+    contentType: req.file.mimetype,
+  });
+
+  const updated = await Student.updateProfile(req.user.id, { cv_url: url });
   res.status(200).json({ success: true, data: updated });
 });
 
