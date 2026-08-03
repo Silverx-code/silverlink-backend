@@ -15,6 +15,7 @@ const {
   deleteUser,
   listCompaniesAdmin,
   deleteCompany,
+  getCompanyVerificationLink,
   checkEmailConnectivity,
 } = require('../controllers/adminController');
 
