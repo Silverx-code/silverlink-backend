@@ -79,12 +79,36 @@ CREATE TABLE IF NOT EXISTS companies (
   is_verified BOOLEAN DEFAULT FALSE,
   verification_email VARCHAR(160),
   available_slots INTEGER DEFAULT 0,
+  source VARCHAR(30) DEFAULT 'admin',
+  discovered_at TIMESTAMPTZ,
+  last_scraped TIMESTAMPTZ,
+  last_updated_by_scraper TIMESTAMPTZ,
+  scraper_confidence NUMERIC(5,2),
+  confidence_score INTEGER DEFAULT 0,
+  times_seen INTEGER DEFAULT 0,
+  last_seen_online TIMESTAMPTZ,
+  source_page TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_companies_status ON companies(status);
 CREATE INDEX IF NOT EXISTS idx_companies_industry ON companies(industry);
 CREATE INDEX IF NOT EXISTS idx_companies_location ON companies(location_id);
+
+CREATE TABLE IF NOT EXISTS scraper_runs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  status VARCHAR(20) NOT NULL DEFAULT 'completed',
+  started_at TIMESTAMPTZ DEFAULT now(),
+  completed_at TIMESTAMPTZ,
+  companies_found INTEGER DEFAULT 0,
+  companies_added INTEGER DEFAULT 0,
+  companies_updated INTEGER DEFAULT 0,
+  duplicates_removed INTEGER DEFAULT 0,
+  errors TEXT,
+  log_file VARCHAR(255),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_scraper_runs_created_at ON scraper_runs(created_at DESC);
 
 CREATE TABLE IF NOT EXISTS company_departments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

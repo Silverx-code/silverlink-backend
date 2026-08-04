@@ -6,6 +6,9 @@ const Company = {
       name, logoUrl, industry, description, website,
       locationId, address, status,
       applyMethod, applyEmail, applyInstructions, applyUrl,
+      source, discoveredAt, lastScraped, lastUpdatedByScraper,
+      scraperConfidence, confidenceScore, timesSeen, lastSeenOnline,
+      sourcePage,
     } = data;
     const { rows } = await query(
       `INSERT INTO companies (
@@ -18,6 +21,139 @@ const Company = {
       [name, logoUrl || null, industry || null, description || null, website || null,
         locationId || null, address || null, status || null,
         applyMethod || null, applyEmail || null, applyInstructions || null, applyUrl || null]
+    );
+    return rows[0];
+  },
+
+  async createFromScraper(data) {
+    const {
+      name, description, website, apply_method, apply_url,
+      source = 'scraper', source_page, confidence_score = 0,
+      last_scraped, last_seen_online,
+    } = data;
+    const { rows } = await query(
+      `INSERT INTO companies (
+         name, description, website, status, apply_method, apply_url, source,
+         discovered_at, last_scraped, last_updated_by_scraper, confidence_score,
+         times_seen, last_seen_online, source_page, is_verified
+       )
+       VALUES ($1, $2, $3, 'pending_confirmation', COALESCE($4, 'platform'), $5, $6,
+               now(), $7, $7, $8, 1, $9, $10, FALSE)
+       RETURNING *`,
+      [name, description || null, website || null, apply_method || null, apply_url || null,
+        source, last_scraped || null, confidence_score, last_seen_online || null, source_page || null]
+    );
+    return rows[0];
+  },
+
+  async findByWebsite(website) {
+    const { rows } = await query('SELECT * FROM companies WHERE website = $1 LIMIT 1', [website]);
+    return rows[0];
+  },
+
+  async updateFromScraper(id, data) {
+    const {
+      description, website, apply_method, apply_url,
+      source = 'scraper', source_page, confidence_score = 0,
+      last_scraped, last_seen_online,
+    } = data;
+    const { rows } = await query(
+      `UPDATE companies
+       SET description = COALESCE($1, description),
+           website = COALESCE($2, website),
+           apply_method = COALESCE($3, apply_method),
+           apply_url = COALESCE($4, apply_url),
+           source = COALESCE($5, source),
+           source_page = COALESCE($6, source_page),
+           confidence_score = COALESCE($7, confidence_score),
+           last_scraped = COALESCE($8, last_scraped),
+           last_seen_online = COALESCE($9, last_seen_online),
+           last_updated_by_scraper = now(),
+           times_seen = times_seen + 1,
+           is_verified = FALSE
+       WHERE id = $10 RETURNING *`,
+      [description || null, website || null, apply_method || null, apply_url || null,
+        source, source_page || null, confidence_score, last_scraped || null,
+        last_seen_online || null, id]
+    );
+    return rows[0];
+  },
+
+  async listRecentScraperRuns(limit = 10) {
+    const { rows } = await query(
+      `SELECT * FROM scraper_runs ORDER BY created_at DESC LIMIT $1`,
+      [limit]
+    );
+    return rows;
+  },
+
+  async createScraperRun(data) {
+    const { rows } = await query(
+      `INSERT INTO scraper_runs (status, started_at, completed_at, companies_found, companies_added, companies_updated, duplicates_removed, errors, log_file)
+       VALUES ($1, now(), NULL, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [data.status || 'running', data.companiesFound || 0, data.companiesAdded || 0, data.companiesUpdated || 0, data.duplicatesRemoved || 0, data.errors || null, data.logFile || null]
+    );
+    return rows[0];
+  },
+
+  async updateScraperRun(id, data) {
+    const { rows } = await query(
+      `UPDATE scraper_runs
+       SET status = COALESCE($1, status),
+           completed_at = COALESCE($2, completed_at),
+           companies_found = COALESCE($3, companies_found),
+           companies_added = COALESCE($4, companies_added),
+           companies_updated = COALESCE($5, companies_updated),
+           duplicates_removed = COALESCE($6, duplicates_removed),
+           errors = COALESCE($7, errors),
+           log_file = COALESCE($8, log_file)
+       WHERE id = $9 RETURNING *`,
+      [data.status || null, data.completedAt || null, data.companiesFound || null, data.companiesAdded || null, data.companiesUpdated || null, data.duplicatesRemoved || null, data.errors || null, data.logFile || null, id]
+    );
+    return rows[0];
+  },
+
+  async latestScraperRun() {
+    const { rows } = await query('SELECT * FROM scraper_runs ORDER BY created_at DESC LIMIT 1');
+    return rows[0];
+  },
+
+  async getScraperStats() {
+    const { rows } = await query(
+      `SELECT
+         COUNT(*)::int AS companies_found,
+         COUNT(*) FILTER (WHERE source = 'scraper')::int AS scraper_companies,
+         COUNT(*) FILTER (WHERE is_verified = FALSE AND source = 'scraper')::int AS pending_review
+       FROM companies`
+    );
+    return rows[0];
+  },
+
+  async getScraperLogFile() {
+    const { rows } = await query('SELECT log_file FROM scraper_runs ORDER BY created_at DESC LIMIT 1');
+    return rows[0]?.log_file || null;
+  },
+
+  async findByEmail(email) {
+    const { rows } = await query('SELECT * FROM companies WHERE verification_email = $1 LIMIT 1', [email]);
+    return rows[0];
+  },
+
+  async findByName(name) {
+    const { rows } = await query('SELECT * FROM companies WHERE name ILIKE $1 LIMIT 1', [name]);
+    return rows[0];
+  },
+
+  async findAllBySource(source) {
+    const { rows } = await query('SELECT * FROM companies WHERE source = $1 ORDER BY name ASC', [source]);
+    return rows;
+  },
+
+  async updateStatus(companyId, status) {
+    const { rows } = await query(
+      'UPDATE companies SET status = $1 WHERE id = $2 RETURNING *',
+      [status, companyId]
     );
     return rows[0];
   },

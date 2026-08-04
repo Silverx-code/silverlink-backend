@@ -3,6 +3,12 @@ const path = require('path');
 const { pool } = require('../config/db');
 
 async function migrate() {
+  if (!process.env.DATABASE_URL) {
+    console.error('DATABASE_URL is not set. Configure your backend environment before running migrations.');
+    process.exitCode = 1;
+    return;
+  }
+
   const baseSchema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 
   const migrationsDir = path.join(__dirname, 'migrations');

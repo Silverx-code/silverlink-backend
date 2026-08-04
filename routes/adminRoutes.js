@@ -18,6 +18,11 @@ const {
   getCompanyVerificationLink,
   checkEmailConnectivity,
 } = require('../controllers/adminController');
+const {
+  getScraperStatus,
+  runScraperManually,
+  getScraperLogs,
+} = require('../controllers/scraperController');
 
 const router = express.Router();
 
@@ -31,6 +36,9 @@ router.get('/diagnostics/email', checkEmailConnectivity);
 router.get('/companies/pending', listPendingCompanies);
 router.patch('/companies/:id/verify', verifyCompanyManually);
 router.get('/companies', listCompaniesAdmin);
+router.get('/scraper/status', getScraperStatus);
+router.post('/scraper/run', runScraperManually);
+router.get('/scraper/logs', getScraperLogs);
 router.delete('/companies/:id', deleteCompany);
 
 router.get('/reviews/unmoderated', listUnmoderatedReviews);

@@ -9,6 +9,7 @@ const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const initSockets = require('./sockets/chat');
+const { startScheduler } = require('./scraper/scheduler');
 
 const authRoutes = require('./routes/authRoutes');
 const studentRoutes = require('./routes/studentRoutes');
@@ -76,6 +77,7 @@ app.use(errorHandler);
 // Wrap in a plain HTTP server so Socket.io can share the same port
 const httpServer = http.createServer(app);
 initSockets(httpServer);
+startScheduler();
 
 httpServer.listen(config.port, () => {
   console.log(`Silver Link API (HTTP + WebSocket) running on port ${config.port} [${config.env}]`);
