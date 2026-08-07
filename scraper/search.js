@@ -1,7 +1,8 @@
 const { searchQueries, maxUrlsPerQuery } = require('./config');
 const { URL } = require('url');
 
-function buildSearchUrls(baseUrl = 'https://example.com') {
+function buildSearchUrls(baseUrl) {
+  if (!baseUrl) return [];
   const urls = new Set();
   const origin = new URL(baseUrl).origin;
 

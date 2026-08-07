@@ -1,8 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
-const { buildSearchUrls } = require('./search');
-const { searchQueries, maxUrlsPerQuery } = require('./config');
+const { maxUrlsPerQuery } = require('./config');
 
 async function loadDatasetUrls() {
   const datasetFile = process.env.SCRAPER_DATASET_FILE || '';
@@ -24,7 +23,6 @@ async function loadDatasetUrls() {
 }
 
 async function collectCandidateUrls(options = {}) {
-  const includeFallback = options.includeFallback !== false;
   const urls = new Set();
 
   const datasetUrls = await loadDatasetUrls();
@@ -55,10 +53,6 @@ async function collectCandidateUrls(options = {}) {
         urls.add(`${normalized}/jobs`);
         urls.add(`${normalized}/internship`);
       });
-  }
-
-  if (includeFallback) {
-    buildSearchUrls('https://example.com').forEach((url) => urls.add(url));
   }
 
   return Array.from(urls).slice(0, maxUrlsPerQuery * 3);

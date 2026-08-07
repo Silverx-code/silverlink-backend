@@ -8,14 +8,14 @@ async function run() {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'silverlink-scraper-'));
   const datasetPath = path.join(tmpDir, 'dataset.json');
   fs.writeFileSync(datasetPath, JSON.stringify([
-    { url: 'https://example.com/careers' },
-    { url: 'https://example.com/jobs' },
+    { url: 'https://fixture.test/careers' },
+    { url: 'https://fixture.test/jobs' },
   ]));
 
   process.env.SCRAPER_DATASET_FILE = datasetPath;
-  const urls = await collectCandidateUrls({ includeFallback: false });
-  assert.ok(urls.includes('https://example.com/careers'));
-  assert.ok(urls.includes('https://example.com/jobs'));
+  const urls = await collectCandidateUrls();
+  assert.ok(urls.includes('https://fixture.test/careers'));
+  assert.ok(urls.includes('https://fixture.test/jobs'));
 
   console.log('sources tests passed');
 }
