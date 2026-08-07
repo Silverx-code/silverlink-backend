@@ -1,10 +1,9 @@
 const fs = require('fs');
 const path = require('path');
-const { URL } = require('url');
-const { maxUrlsPerQuery } = require('./config');
+const { maxUrlsPerQuery, sources } = require('./config');
 
 async function loadDatasetUrls() {
-  const datasetFile = process.env.SCRAPER_DATASET_FILE || '';
+  const datasetFile = process.env.SCRAPER_DATASET_FILE || sources.datasetFile;
   if (!datasetFile) return [];
   if (!fs.existsSync(datasetFile)) return [];
 
@@ -49,9 +48,6 @@ async function collectCandidateUrls(options = {}) {
       .forEach((site) => {
         const normalized = site.startsWith('http') ? site : `https://${site}`;
         urls.add(normalized);
-        urls.add(`${normalized}/careers`);
-        urls.add(`${normalized}/jobs`);
-        urls.add(`${normalized}/internship`);
       });
   }
 

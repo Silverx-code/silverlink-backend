@@ -17,6 +17,12 @@ async function run() {
   assert.ok(urls.includes('https://fixture.test/careers'));
   assert.ok(urls.includes('https://fixture.test/jobs'));
 
+  process.env.SCRAPER_COMPANY_SITES = 'https://company.example/careers';
+  const companySiteUrls = await collectCandidateUrls();
+  assert.ok(companySiteUrls.includes('https://company.example/careers'));
+  assert.ok(!companySiteUrls.includes('https://company.example/careers/jobs'));
+  delete process.env.SCRAPER_COMPANY_SITES;
+
   console.log('sources tests passed');
 }
 

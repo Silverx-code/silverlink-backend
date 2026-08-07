@@ -7,7 +7,7 @@ const { extractCompanyData } = require('./extractor');
 const { deduplicateCompanies } = require('./deduplicator');
 const { upsertDiscoveredCompanies } = require('./updater');
 const { collectCandidateUrls } = require('./sources');
-const { logDir, maxPages } = require('./config');
+const { logDir, maxPages, crawlConcurrency } = require('./config');
 
 fs.mkdirSync(logDir, { recursive: true });
 
@@ -25,12 +25,14 @@ async function runScraper(options = {}) {
   const discovered = [];
   const pagesToVisit = urls.slice(0, maxPages);
 
-  for (const url of pagesToVisit) {
+  const scrapeUrl = async (url) => {
     try {
-      const { html } = await downloadPage(url);
+      const { html } = await downloadPage(url, {
+        onRetry: (attempt, error) => appendLog(`Retry ${attempt} for ${url}: ${error.message}`),
+      });
       const parsed = parseHtml(html, url);
       const classification = classifyOpportunity(parsed.text);
-      if (classification.label === 'ignore') continue;
+      if (classification.label === 'ignore') return;
 
       const record = extractCompanyData(parsed, url);
       record.confidenceScore = classification.score;
@@ -39,6 +41,11 @@ async function runScraper(options = {}) {
     } catch (error) {
       appendLog(`Failed to fetch ${url}: ${error.message}`);
     }
+  };
+
+  for (let start = 0; start < pagesToVisit.length; start += crawlConcurrency) {
+    const batch = pagesToVisit.slice(start, start + crawlConcurrency);
+    await Promise.all(batch.map(scrapeUrl));
   }
 
   const unique = deduplicateCompanies(discovered);
